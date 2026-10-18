@@ -1,12 +1,11 @@
 ---
 name: github-publish-rest
-display_name: 用 REST API 推送代码到 GitHub 无凭据助手 连接器只读 403
-display_name_en: Publish to GitHub via the REST API (no credential helper)
-description: 在这台机器上把本地文件夹发布到 GitHub 的可用通道。连接器只读（create_repository / push_files 均 403）、便携版 git 没有凭据助手导致 git push 取不到凭据，因此改为读取已存储的 token 后直接走 Git Data API 建一次提交。含现成脚本、提交后的哈希校验方法与三个已知坑。
-description_zh: GitHub 发布（推到 GitHub/上传代码/新建仓库/403 Resource not accessible by integration/could not read Username/terminal prompts disabled/凭据助手/wincred/GCM/非快进被拒/需先 fetch）：连接器只读 + 无凭据助手时的 REST API 发布法与校验法。
-description_en: Publish a local folder to GitHub when the connector is read-only and the bundled git has no credential helper, by reading the stored token and driving the Git Data API.
-category: 开发工具
-version: 1.16.0
+slug: github-publish-rest
+displayName: GitHub Publisher (REST API)
+description: Publish a local folder to a GitHub repo as ONE commit via the REST Git Data API — the working method when the GitHub connector is read-only (create_repository / push_files return 403) and the bundled git has no credential helper. Reads the stored token (git credential fill, or GITHUB_TOKEN / GH_TOKEN env), then creates blobs → tree → commit → ref. Ships a ready-to-run zero-dependency Python script (scripts/github-publish.py), a post-publish blob SHA verification method, and documents the known pitfalls (account-rename 307, git credential fill hang, timezone-aware contribution graph). Use when the user says "publish to github", "push to github", "upload code", "create repo", "deploy skill", "发到 github", "推到 github", "上传代码", "新建仓库".
+description_zh: 在本机把本地文件夹发布到 GitHub 的可用通道（连接器只读 + 无凭据助手时）。读取已存储 token 后走 Git Data API 建一次提交，含零依赖现成脚本、发布后哈希校验与已知坑。
+category: dev-tool
+version: 1.17.0
 author: WorkBuddy
 agent_created: true
 ---
@@ -74,10 +73,10 @@ print("本地", now.date(), "→ 日历按", utc.date())
 
 ## 可用做法：把 token 交给 REST API
 
-现成脚本：`C:\Users\mercy\Tools\github-publish.py`
+现成脚本：`scripts/github-publish.py`
 
 ```bat
-python C:\Users\mercy\Tools\github-publish.py ^
+python scripts/github-publish.py ^
   --owner ebifry --repo <仓库名> --dir <本地文件夹> --message "feat: ..."
 python ... --dry-run        :: 只解析 token / ref / 文件清单，不写任何东西
 ```
@@ -118,7 +117,7 @@ printf 'protocol=https\nhost=github.com\n\n' \
 ```bash
 TOKEN=$(printf 'protocol=https\nhost=github.com\n\n' \
         | git -c credential.interactive=false credential fill 2>/dev/null | sed -n 's/^password=//p')
-GITHUB_TOKEN="$TOKEN" python C:/Users/mercy/Tools/github-publish.py \
+GITHUB_TOKEN="$TOKEN" python scripts/github-publish.py \
   --owner ebifry --repo <repo> --dir <folder> --message "..." --dry-run
 unset TOKEN        # 用完清掉
 ```
@@ -177,7 +176,7 @@ def get_token():
 
 **用法**（⭐ token 走环境变量，**不出现在 argv**）：
 ```bash
-GITHUB_TOKEN='github_pat_...' python C:/Users/mercy/Tools/github-publish.py \
+GITHUB_TOKEN='github_pat_...' python scripts/github-publish.py \
   --owner <user> --repo <repo> --dir <folder> --message "..." --dry-run
 # 先 --dry-run 确认 token ok / 目标分支 / 文件数，再去掉 --dry-run 正式推
 ```
@@ -208,7 +207,7 @@ wc -c "$TEMP/gh_tok"      # 期望 41（40 字符 + 换行）
 
 ⭐ **跨语言传路径的坑**：Python 里 `open("/tmp/gh_tok")` 在 Git Bash 下会
 `FileNotFoundError` —— `/tmp` 是 MSYS 虚拟路径，Python 不认。
-**必须用 `cygpath -w` 转换后的真路径**（本机 = `C:/Users/mercy/AppData/Local/Temp/gh_tok`）。
+**必须用 `cygpath -w` 转换后的真路径**（本机 = `./gh_tok`）。
 更稳的做法：把 token 缓存路径写成一个**Windows 绝对路径变量**，两种语言共用同一个字符串。
 
 **Fine-grained PAT 需要的最小权限**：`Repository access` 只选目标仓库 +
@@ -732,7 +731,7 @@ UTC 那套换算回去仍是同一个瞬间，不会更差。**所以直接带�
 ```bash
 # ✅ 正确：Write 把信息写成文件，再交给 --message-file
 python github-publish.py --owner <owner> --repo <repo> --dir <folder> \
-  --message-file C:/Users/mercy/Tools/_msg.txt
+  --message-file _msg.txt
 ```
 脚本会打印 `message : N 字符 / M 行` 让你确认没被截断。
 
